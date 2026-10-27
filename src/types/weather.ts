@@ -1,47 +1,46 @@
-/**
- * Contratos de domínio compartilhados do Weather App.
- *
- * Decisão de arquitetura: as temperaturas são sempre armazenadas em Celsius
- * internamente e convertidas apenas na camada de apresentação. Assim, a troca
- * de unidade (C/F) nunca dispara um novo request.
- */
-
 export type Unit = 'celsius' | 'fahrenheit';
 
-/** Resultado da API de geocoding (uma cidade). */
 export interface City {
   id: number;
   name: string;
   country: string;
-  /** Estado/região, quando disponível (ajuda a desambiguar homônimos). */
-  admin1?: string;
+  admin1: string | null;
   latitude: number;
   longitude: number;
 }
 
-/** Condições atuais. Temperatura sempre em °C. */
+/** Medidas ausentes ou inválidas são null; temperaturas permanecem em Celsius. */
 export interface CurrentWeather {
-  temperature: number;
-  weatherCode: number;
-  humidity: number;
-  windSpeed: number;
-  pressure: number;
-  precipitation: number;
-  time: string;
+  /** Instante ISO 8601 UTC, com sufixo Z. */
+  observedAt: string | null;
+  temperatureC: number | null;
+  feelsLikeC: number | null;
+  /** Código da condição na tabela WMO. */
+  weatherCode: number | null;
+  /** Percentual entre 0 e 100. */
+  relativeHumidity: number | null;
+  windSpeedKmh: number | null;
+  /** Precipitação no intervalo atual, em mm. */
+  precipitationMm: number | null;
+  /** Pressão ao nível do mar, em hPa. */
+  pressureHpa: number | null;
 }
 
-/** Um dia da previsão. Temperaturas sempre em °C. */
 export interface ForecastDay {
+  /** Data YYYY-MM-DD no fuso da cidade. */
   date: string;
-  min: number;
-  max: number;
-  weatherCode: number;
-  precipitationProbability: number;
+  weatherCode: number | null;
+  temperatureMinC: number | null;
+  temperatureMaxC: number | null;
+  /** Percentual máximo diário entre 0 e 100. */
+  precipitationProbability: number | null;
 }
 
-/** Agregado entregue à UI: cidade + clima atual + 5 dias de previsão. */
 export interface WeatherData {
   city: City;
+  /** Fuso IANA, como America/Sao_Paulo. */
+  timezone: string;
   current: CurrentWeather;
+  /** Hoje e os quatro dias seguintes; sequência validada pelo serviço. */
   forecast: ForecastDay[];
 }

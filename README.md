@@ -100,6 +100,131 @@ Decisões-chave:
 - **Rede isolada** em `services/` — componentes e hooks não conhecem URLs.
 - Sempre tratar **loading**, **erro** e **vazio**.
 
+### Executar o aplicativo
+
+Use `pnpm dev` para abrir o layout de [`App`](src/App.tsx). O header reúne
+WeatherView, busca e seletor °C/°F. O [`useWeather`](src/hooks/useWeather.ts)
+consulta a Open-Meteo e carrega automaticamente o clima da primeira cidade
+encontrada. A tela apresenta os estados inicial, carregando, sem resultados,
+erro e sucesso, sem seletor de demonstração. “Tentar novamente” repete a etapa
+que falhou (busca ou previsão), preservando o termo pesquisado.
+
+O hook expõe `operation` e `selectedCity` para identificar a etapa e a cidade
+em carregamento/erro. Nova operação ou desmontagem cancela a requisição anterior,
+sem exibir erro para esse cancelamento. O timeout de 10 segundos cobre conexão
+e leitura do JSON; falhas de rede, timeout, HTTP 429 e indisponibilidade têm
+mensagens próprias, com categoria em `WeatherServiceError` e status para erros HTTP.
+
+A unidade começa em Celsius e permanece ao alternar estados, sem alterar os
+dados-base nem gerar requisições. A preferência ainda não é persistida.
+O fixture de São Paulo permanece disponível somente para testes e exemplos.
+
+### Acessibilidade e responsividade
+
+O protótipo oferece “Pular para o conteúdo”, foco no conteúdo após retry,
+anúncio de sucesso e controles de busca com altura mínima de 44px.
+Texto pode quebrar em telas estreitas e com ampliação a 200%, sem esconder
+conteúdo via `overflow: hidden`. Os botões de unidade usam Tab/Shift+Tab e
+Enter/Espaço; carregamento respeita movimento reduzido.
+
+Execute `pnpm exec playwright test tests/e2e/accessibility.spec.ts --project=chromium`
+para testar os cinco estados em 320, 375, 640, 768, 1024 e 1280px, grid,
+reflow de texto, teclado, foco e movimento reduzido. O cenário de contraste
+verifica razões mínimas para a paleta sobre uma composição conservadora dos
+fundos glass. Os testes automatizados não substituem validação com leitores
+de tela nem certificam conformidade WCAG completa.
+
+### Formulário de busca
+
+[`SearchBar`](src/components/SearchBar.tsx) recebe `onSearch(city: string)` e
+`disabled?: boolean`. A busca ocorre somente por botão ou Enter, com espaços
+externos removidos; termos vazios ou acima de 100 pontos de código Unicode
+apresentam orientação acessível sem disparar o callback. `disabled` bloqueia
+o campo e o envio. O componente não acessa a API e preserva o texto digitado.
+
+### Controle de unidade
+
+[`UnitToggle`](src/components/UnitToggle.tsx) recebe `unit: Unit` e
+`onChange(unit: Unit)`. O componente controlado apresenta °C e °F em um grupo
+acessível e indica a seleção com `aria-pressed`. Use Tab/Shift+Tab para navegar
+e Enter/Espaço para ativar uma opção. O componente pai mantém a unidade;
+o controle não converte temperaturas, não persiste dados e não chama a API.
+
+### Hero de clima atual
+
+[`CurrentWeather`](src/components/CurrentWeather.tsx) recebe `city`, `current`
+e `unit`. Exibe temperatura e sensação na unidade selecionada, condição e ícone
+WMO, umidade (%), vento (km/h), precipitação no intervalo atual (mm) e pressão
+ao nível do mar (hPa). Valores nulos mostram “Indisponível”; códigos WMO
+desconhecidos mostram “Condição indisponível”.
+
+```tsx
+<CurrentWeather city={mockWeatherData.city} current={mockWeatherData.current} unit="celsius" />
+```
+
+O hero é apresentação pura, sem rede ou relógio implícito. Na integração,
+o componente pai deve filtrar dados não atuais, oferecer nova tentativa e
+mostrar a referência temporal no fuso de `WeatherData.timezone`.
+
+### Previsão diária
+
+[`ForecastList`](src/components/ForecastList.tsx) recebe `forecast: ForecastDay[]`
+e `unit: Unit` e renderiza cinco [`ForecastCard`](src/components/ForecastCard.tsx)
+em grid de 2/3/5 colunas. Cada cartão mostra dia, data, condição e ícone WMO,
+máxima/mínima na unidade selecionada e probabilidade de chuva em %.
+Medidas nulas são “Indisponível”; uma coleção com tamanho diferente de cinco
+mostra indisponibilidade, sem completar nem truncar dias.
+
+```tsx
+<ForecastList forecast={mockWeatherData.forecast} unit="celsius" />
+```
+
+[`lib/format`](src/lib/format.ts) formata as datas de calendário recebidas em
+pt-BR sem deslocamento pelo fuso do dispositivo. Os índices 0 e 1 recebem
+“Hoje” e “Amanhã”; os demais recebem o dia da semana. O serviço/componente pai
+deve garantir cinco datas locais válidas, consecutivas e atuais no fuso da cidade.
+O cartão isolado recebe `day`, `index` e `unit`.
+
+### Estados da interface
+
+- [`LoadingState`](src/components/states/LoadingState.tsx): `operation` opcional
+  (`search` ou `weather`, padrão `weather`); anuncia a operação com
+  `role="status"` e `aria-live="polite"`. A animação respeita movimento reduzido.
+- [`ErrorState`](src/components/states/ErrorState.tsx): `onRetry` obrigatório,
+  `operation` e `city: City` opcionais; mensagem segura em `role="alert"` e
+  botão “Tentar novamente”, acessível por teclado. `city` identifica a localidade
+  somente em `operation="weather"`. Mensagens são definidas pelo componente,
+  não por exceções ou payloads recebidos da API.
+- [`EmptyState`](src/components/states/EmptyState.tsx): título e dica em região
+  `role="status"`, sem retry. Por padrão orienta uma busca sem resultados;
+  `title` e `hint` opcionais permitem apresentar a tela inicial.
+
+Todos são componentes de apresentação: não fazem requisições nem disparam
+tentativas automáticas.
+
+### Dados mock para desenvolver a UI
+
+Os contratos estão em [`src/types/weather.ts`](src/types/weather.ts).
+Para montar os componentes sem consultar a API, importe o objeto tipado de
+[`src/mocks/weather.ts`](src/mocks/weather.ts):
+
+```ts
+import { mockWeatherData } from './mocks/weather';
+
+const { city, timezone, current, forecast } = mockWeatherData;
+```
+
+O mock contém São Paulo, condições atuais e exatamente cinco dias consecutivos,
+de 27 a 31 de outubro de 2026. Temperaturas estão em °C, vento em km/h e
+umidade/probabilidade de precipitação em %, precipitação atual em mm e pressão
+em hPa. Medidas indisponíveis nos contratos
+são representadas por `null`, nunca por zero.
+
+Os valores são fictícios e as datas são fixas. Ao testar regras de frescor e
+de “hoje”, fixe o relógio em `2026-10-27T18:00:00Z` (15h em
+`America/Sao_Paulo`) ou atualize o horário de observação e as cinco datas em
+conjunto. O mock não faz requisições nem está conectado automaticamente ao app.
+
 ---
 
 ## Stack

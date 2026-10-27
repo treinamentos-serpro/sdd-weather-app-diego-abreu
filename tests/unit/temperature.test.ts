@@ -1,30 +1,52 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  toFahrenheit,
   convertTemperature,
   formatTemperature,
+  toFahrenheit,
   unitLabel,
 } from '../../src/lib/temperature';
+import type { Unit } from '../../src/types/weather';
 
 describe('temperature', () => {
-  it('converte Celsius para Fahrenheit corretamente', () => {
+  it('converte Celsius para Fahrenheit sem arredondar os dados-base', () => {
     expect(toFahrenheit(0)).toBe(32);
     expect(toFahrenheit(100)).toBe(212);
     expect(toFahrenheit(-40)).toBe(-40);
+    expect(convertTemperature(26.4, 'celsius')).toBe(26.4);
+    expect(convertTemperature(26.4, 'fahrenheit')).toBeCloseTo(79.52);
   });
 
-  it('convertTemperature respeita a unidade', () => {
-    expect(convertTemperature(20, 'celsius')).toBe(20);
-    expect(convertTemperature(0, 'fahrenheit')).toBe(32);
+  it.each<[number, Unit, string]>([
+    [0, 'celsius', '0 °C'],
+    [0, 'fahrenheit', '32 °F'],
+    [26.4, 'fahrenheit', '80 °F'],
+    [1.5, 'celsius', '2 °C'],
+    [-1.5, 'celsius', '-2 °C'],
+    [-2.5, 'celsius', '-3 °C'],
+    [-0.5, 'celsius', '-1 °C'],
+    [-0.1, 'celsius', '0 °C'],
+    [-0, 'celsius', '0 °C'],
+    [2.5, 'fahrenheit', '37 °F'],
+    [(-32.5 * 5) / 9, 'fahrenheit', '-1 °F'],
+  ])('formata %s °C em %s como %s', (value, unit, expected) => {
+    expect(formatTemperature(value, unit)).toBe(expected);
   });
 
-  it('formata com símbolo de grau e arredondamento', () => {
-    expect(formatTemperature(20.4, 'celsius')).toBe('20°');
-    expect(formatTemperature(0, 'fahrenheit')).toBe('32°');
+  it.each([
+    null,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ])('mantém %s indisponível em ambas as unidades', (value) => {
+    for (const unit of ['celsius', 'fahrenheit'] as const) {
+      expect(convertTemperature(value, unit)).toBeNull();
+      expect(formatTemperature(value, unit)).toBe('Indisponível');
+    }
   });
 
-  it('retorna o rótulo da unidade', () => {
+  it('identifica as duas unidades e trata overflow como indisponível', () => {
     expect(unitLabel('celsius')).toBe('°C');
     expect(unitLabel('fahrenheit')).toBe('°F');
+    expect(formatTemperature(Number.MAX_VALUE, 'fahrenheit')).toBe('Indisponível');
   });
 });
